@@ -28,6 +28,10 @@ class Parser
      * @var int
      */
     private $rowsParsed = 0;
+    /**
+     * @var string
+     */
+    private $buffer = '';
 
     public function __construct(
         File\Handle $fileHandle,
@@ -45,12 +49,13 @@ class Parser
     {
         return call(function () {
             $isFirstRead = $this->fileHandle->tell() === 0;
-            if ($this->fileHandle->eof()) {
+            if ($this->fileHandle->eof() && $this->buffer === '') {
                 return null;
             }
             $buffer = '';
             $newLinePos = null;
-            while ($chunk = yield $this->fileHandle->read()) {
+            while ($chunk = $this->buffer ?: yield $this->fileHandle->read()) {
+                $this->buffer = '';
                 if ($isFirstRead) {
                     $chunk = $this->removeBom($chunk);
                 }
@@ -73,9 +78,7 @@ class Parser
             }
             $row = $buffer;
             if ($newLinePos !== false) {
-                $bufferSize = \strlen($buffer);
-                $seekOffset = $bufferSize-$newLinePos;
-                yield $this->fileHandle->seek(-($seekOffset-1), \SEEK_CUR);
+                $this->buffer = substr($buffer, $newLinePos + 1);
                 $row = substr($buffer, 0, $newLinePos);
             }
             $this->rowsParsed++;
